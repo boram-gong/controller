@@ -30,12 +30,12 @@ func (this *goTask) start() {
 		for {
 			select {
 			case <-time.Tick(time.Duration(this.Step) * time.Second):
-				out, err := CmdWork(this.TaskOrder)
+				out, err := cmdWork(this.TaskOrder)
 				if err != nil {
 					this.Status = "stop(order err)"
 					return
 				}
-				outDataChan <- OutStringDeal(out)
+				outDataChan <- outStringDeal(out)
 			case <-this.DownChan:
 				return
 
