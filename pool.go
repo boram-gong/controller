@@ -1,13 +1,14 @@
 package controller
 
 import (
+	"errors"
+	"fmt"
 	"sync"
-	"time"
 )
 
 var outDataChan = make(chan string, 100)
 
-func ResetOutDataChan(length int) {
+func ResetMessagePool(length int) {
 	outDataChan = nil
 	outDataChan = make(chan string, length)
 }
@@ -38,14 +39,14 @@ func (this *GoPool) DeleteTake(task_name string) {
 }
 
 func (this *GoPool) DeleteAllTake() {
-	this.StopAll()
+	this.StopAllTake()
 	this.Lock()
 	defer this.Unlock()
 	this.Pool = nil
 	this.Pool = make(map[string]*goTask)
 }
 
-func (this *GoPool) StartAll() {
+func (this *GoPool) StartAllTake() {
 	this.RLock()
 	defer this.RUnlock()
 	for _, task := range this.Pool {
@@ -65,7 +66,7 @@ func (this *GoPool) StartOneTask(task_name string) bool {
 	}
 }
 
-func (this *GoPool) StopAll() {
+func (this *GoPool) StopAllTake() {
 	this.RLock()
 	defer this.RUnlock()
 	for _, task := range this.Pool {
@@ -85,53 +86,46 @@ func (this *GoPool) StopOneTask(task_name string) bool {
 	}
 }
 
-func (this *GoPool) WaitData() (data string) {
+func (this *GoPool) WaitDataFromMessagePool() (data string, err error) {
+	if len(this.Pool) == 0 {
+		return "", errors.New("No task currently exists")
+	}
+	if !this.queryAllStop() {
+		return "", errors.New("all task stop")
+	}
 	select {
 	case data = <-outDataChan:
 		return
 	}
 }
 
-type goTask struct {
-	TakeName  string
-	TaskOrder string
-	Step      int
-	Status    string
-	DownChan  chan int
+func (this *GoPool) QueryTaskState(task_name string) string {
+	this.RLock()
+	defer this.RUnlock()
+	task, ok := this.Pool[task_name]
+	if ok {
+		return task.Status
+	} else {
+		return "don't have this task"
+	}
 }
 
-func new_GoTask(task_name string, task_order string, step int) (go_task *goTask) {
-	go_task = new(goTask)
-	go_task.TakeName = task_name
-	go_task.TaskOrder = task_order
-	go_task.Step = step
-	go_task.Status = "stop(first status)"
-	go_task.DownChan = make(chan int, 1)
-	return
-}
-
-func (this *goTask) start() {
-	this.Status = "start"
-	go func() {
-		for {
-			select {
-			case <-time.Tick(time.Duration(this.Step) * time.Second):
-				out, err := CmdWork(this.TaskOrder)
-				if err != nil {
-					this.Status = "stop(order err)"
-					return
-				}
-				outDataChan <- OutStringDeal(out)
-
-			case <-this.DownChan:
-				this.Status = "stop(initiative stop)"
-				return
-
-			}
+func (this *GoPool) queryAllStop() bool {
+	this.RLock()
+	defer this.RUnlock()
+	for _, task := range this.Pool {
+		if task.Status == "start" {
+			return true
 		}
-	}()
+	}
+	return false
 }
 
-func (this *goTask) stop() {
-	this.DownChan <- 1
+func (this *GoPool) QueryAllTaskState() (result string) {
+	this.RLock()
+	defer this.RUnlock()
+	for name, task := range this.Pool {
+		result += fmt.Sprintf("%s: %s\n", name, task.Status)
+	}
+	return
 }
