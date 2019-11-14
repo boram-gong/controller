@@ -32,16 +32,21 @@ func (this *GoPool) AppendTake(task_name string, task_order string, step int) {
 }
 
 func (this *GoPool) DeleteTake(task_name string) {
-	this.StopOneTask(task_name)
 	this.Lock()
 	defer this.Unlock()
+	task, ok := this.Pool[task_name]
+	if ok {
+		task.stop()
+	}
 	delete(this.Pool, task_name)
 }
 
 func (this *GoPool) DeleteAllTake() {
-	this.StopAllTake()
 	this.Lock()
 	defer this.Unlock()
+	for _, task := range this.Pool {
+		task.stop()
+	}
 	this.Pool = nil
 	this.Pool = make(map[string]*goTask)
 }
