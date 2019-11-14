@@ -124,6 +124,9 @@ func (this *GoPool) queryAllStop() bool {
 func (this *GoPool) QueryAllTaskState() (result string) {
 	this.RLock()
 	defer this.RUnlock()
+	if len(this.Pool) == 0 {
+		return "no task"
+	}
 	for name, task := range this.Pool {
 		result += fmt.Sprintf("%s: %s\n", name, task.Status)
 	}
