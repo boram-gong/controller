@@ -121,7 +121,7 @@ func (this *goTask) start() {
 					this.Status = "stop(order err)"
 					return
 				}
-				outDataChan <- out
+				outDataChan <- OutStringDeal(out)
 
 			case <-this.DownChan:
 				this.Status = "stop(initiative stop)"

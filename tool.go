@@ -1,6 +1,9 @@
 package controller
 
-import "os/exec"
+import (
+	"os/exec"
+	"strings"
+)
 
 func CmdWork(shell string) (string, error) {
 	var (
@@ -15,4 +18,8 @@ func CmdWork(shell string) (string, error) {
 	}
 
 	return string(output), nil
+}
+
+func OutStringDeal(str string) string{
+	return strings.Split(str,"\n")[0]
 }
