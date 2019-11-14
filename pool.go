@@ -1,16 +1,21 @@
 package controller
 
 import (
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"sync"
 )
 
 var outDataChan = make(chan string, 100)
+var closeMessagePoolChan = make(chan int, 1)
 
 func ResetMessagePool(length int) {
 	outDataChan = nil
 	outDataChan = make(chan string, length)
+}
+
+func CloseMessagePoolChan() {
+	closeMessagePoolChan <- 1
 }
 
 type GoPool struct {
@@ -92,15 +97,11 @@ func (this *GoPool) StopOneTask(task_name string) bool {
 }
 
 func (this *GoPool) WaitDataFromMessagePool() (data string, err error) {
-	if len(this.Pool) == 0 {
-		return "", errors.New("No task currently exists")
-	}
-	if !this.queryAllStop() {
-		return "", errors.New("all task stop")
-	}
 	select {
 	case data = <-outDataChan:
 		return
+	case <-closeMessagePoolChan:
+		return "", errors.New("close")
 	}
 }
 
@@ -113,17 +114,6 @@ func (this *GoPool) QueryTaskState(task_name string) string {
 	} else {
 		return "don't have this task"
 	}
-}
-
-func (this *GoPool) queryAllStop() bool {
-	this.RLock()
-	defer this.RUnlock()
-	for _, task := range this.Pool {
-		if task.Status == "start" {
-			return true
-		}
-	}
-	return false
 }
 
 func (this *GoPool) QueryAllTaskState() (result string) {

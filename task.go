@@ -36,7 +36,6 @@ func (this *goTask) start() {
 					return
 				}
 				outDataChan <- OutStringDeal(out)
-
 			case <-this.DownChan:
 				return
 
