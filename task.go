@@ -1,8 +1,12 @@
 package controller
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type goTask struct {
+	sync.RWMutex
 	TakeName  string
 	TaskOrder string
 	Step      int
@@ -34,7 +38,6 @@ func (this *goTask) start() {
 				outDataChan <- OutStringDeal(out)
 
 			case <-this.DownChan:
-				this.Status = "stop(initiative stop)"
 				return
 
 			}
@@ -44,4 +47,7 @@ func (this *goTask) start() {
 
 func (this *goTask) stop() {
 	this.DownChan <- 1
+	this.Lock()
+	this.Status = "stop(initiative stop)"
+	this.Unlock()
 }
