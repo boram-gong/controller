@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func CmdWork(shell string) (string, error) {
+func cmdWork(shell string) (string, error) {
 	var (
 		cmd    *exec.Cmd
 		output []byte
@@ -20,6 +20,6 @@ func CmdWork(shell string) (string, error) {
 	return string(output), nil
 }
 
-func OutStringDeal(str string) string{
-	return strings.Split(str,"\n")[0]
+func outStringDeal(str string) string {
+	return strings.Split(str, "\n")[0]
 }
