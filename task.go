@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -32,6 +33,7 @@ func (this *goTask) start() {
 			case <-time.Tick(time.Duration(this.Step) * time.Second):
 				out, err := cmdWork(this.TaskOrder)
 				if err != nil {
+					fmt.Println(fmt.Sprintf("%s(%s): stop, error: %v", this.TakeName, this.TaskOrder, err))
 					this.Status = "stop(order err)"
 					return
 				}
