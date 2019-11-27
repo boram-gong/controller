@@ -22,7 +22,7 @@ func new_GoTask(task_name string, task_order string, cyclic bool, step int) (go_
 	go_task.TaskOrder = task_order
 	go_task.Cyclic = cyclic
 	go_task.Step = step
-	go_task.Status = "stop(first status)"
+	go_task.Status = "stop(init status)"
 	go_task.DownChan = make(chan int, 1)
 	return
 }
@@ -32,26 +32,16 @@ func (this *goTask) start() {
 	go func() {
 		for {
 			if !this.Cyclic {
-				out, err := cmdWork(this.TaskOrder)
-				if err != nil {
-					fmt.Println(fmt.Sprintf("%s(%s): stop, error: %v", this.TakeName, this.TaskOrder, err))
-					this.Status = "fail(order err)"
-					return
-				} else {
+				if this.run() {
 					this.Status = "successful"
-					outDataChan <- outStringDeal(out)
-					return
 				}
+				return
 			}
 			select {
 			case <-time.Tick(time.Duration(this.Step) * time.Second):
-				out, err := cmdWork(this.TaskOrder)
-				if err != nil {
-					fmt.Println(fmt.Sprintf("%s(%s): stop, error: %v", this.TakeName, this.TaskOrder, err))
-					this.Status = "stop(order err)"
+				if !this.run() {
 					return
 				}
-				outDataChan <- outStringDeal(out)
 			case <-this.DownChan:
 				return
 			}
@@ -67,4 +57,19 @@ func (this *goTask) stop() {
 	this.Lock()
 	this.Status = "stop(initiative stop)"
 	this.Unlock()
+}
+
+func (this *goTask) run() bool {
+	var (
+		out string
+		err error
+	)
+	if out, err = cmdWork(this.TaskOrder); err != nil {
+		fmt.Println(fmt.Sprintf("%s(%s): stop, error: %v", this.TakeName, this.TaskOrder, err))
+		this.Status = "stop(order fail)"
+		return false
+	} else {
+		outDataChan <- outStringDeal(out)
+		return true
+	}
 }
