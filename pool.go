@@ -29,8 +29,8 @@ func NewPool() (pool *GoPool) {
 	return
 }
 
-func (this *GoPool) AppendTake(task_name string, task_order string, step int) {
-	task := new_GoTask(task_name, task_order, step)
+func (this *GoPool) AppendTake(task_name string, task_order string, cyclic bool, step int) {
+	task := new_GoTask(task_name, task_order, cyclic, step)
 	this.Lock()
 	defer this.Unlock()
 	this.Pool[task_name] = task
@@ -73,6 +73,26 @@ func (this *GoPool) StartOneTask(task_name string) bool {
 	} else {
 		task.start()
 		return true
+	}
+}
+
+func (this *GoPool) StartCyclicTask() {
+	this.RLock()
+	defer this.RUnlock()
+	for _, task := range this.Pool {
+		if task.Cyclic {
+			task.start()
+		}
+	}
+}
+
+func (this *GoPool) StartSingleTask() {
+	this.RLock()
+	defer this.RUnlock()
+	for _, task := range this.Pool {
+		if !task.Cyclic {
+			task.start()
+		}
 	}
 }
 
