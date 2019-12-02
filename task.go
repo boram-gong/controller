@@ -27,6 +27,15 @@ type goTask struct {
 	DownChan  chan int
 }
 
+func funGenerator(fun func(args ...interface{}) (interface{}, error), args []interface{}) (interface{}, error) {
+	defer func() {
+		if recover() != nil {
+			fmt.Println(fun, "serious mistake!")
+		}
+	}()
+	return fun(args...)
+}
+
 func new_OrderTask(task_name string, task_order string, cyclic bool, step int) (go_task *goTask) {
 	go_task = new(goTask)
 	go_task.TakeName = task_name
@@ -102,7 +111,7 @@ func (this *goTask) run() bool {
 			this.Status = NO_TASK
 			return false
 		} else {
-			if result, err = this.TaskFunc(this.TaskArgs...); err != nil {
+			if result, err = funGenerator(this.TaskFunc, this.TaskArgs); err != nil {
 				fmt.Println(fmt.Sprintf("%s: fail, error: %v", this.TakeName, err))
 				this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
 				return false
