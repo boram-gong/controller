@@ -6,12 +6,12 @@ import (
 	"sync"
 )
 
-var outDataChan = make(chan string, 100)
+var outDataChan = make(chan interface{}, 100)
 var closeMessagePoolChan = make(chan int, 1)
 
 func ResetMessagePool(length int) {
 	outDataChan = nil
-	outDataChan = make(chan string, length)
+	outDataChan = make(chan interface{}, length)
 }
 
 func CloseMessagePoolChan() {
@@ -29,8 +29,15 @@ func NewPool() (pool *GoPool) {
 	return
 }
 
-func (this *GoPool) AppendTake(task_name string, task_order string, cyclic bool, step int) {
-	task := new_GoTask(task_name, task_order, cyclic, step)
+func (this *GoPool) AppendOrderTake(task_name string, task_order string, cyclic bool, step int) {
+	task := new_OrderTask(task_name, task_order, cyclic, step)
+	this.Lock()
+	defer this.Unlock()
+	this.Pool[task_name] = task
+}
+
+func (this *GoPool) AppendFuncTake(task_name string, task_func func(args ...interface{}) (interface{}, error), task_args []interface{}, cyclic bool, step int) {
+	task := new_FuncTask(task_name, task_func, task_args, cyclic, step)
 	this.Lock()
 	defer this.Unlock()
 	this.Pool[task_name] = task
@@ -116,12 +123,12 @@ func (this *GoPool) StopOneTask(task_name string) bool {
 	}
 }
 
-func (this *GoPool) WaitDataFromMessagePool() (data string, err error) {
+func (this *GoPool) WaitDataFromMessagePool() (data interface{}, err error) {
 	select {
 	case data = <-outDataChan:
 		return
 	case <-closeMessagePoolChan:
-		return "", errors.New("close")
+		return nil, errors.New("close")
 	}
 }
 
