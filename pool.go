@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"fmt"
 	"github.com/pkg/errors"
 	"sync"
 )
@@ -143,14 +142,15 @@ func (this *GoPool) QueryTaskState(task_name string) string {
 	}
 }
 
-func (this *GoPool) QueryAllTaskState() (result string) {
+func (this *GoPool) QueryAllTaskState() (status_map map[string]string) {
 	this.RLock()
 	defer this.RUnlock()
+	status_map = make(map[string]string)
 	if len(this.Pool) == 0 {
-		return "no task"
+		return
 	}
 	for name, task := range this.Pool {
-		result += fmt.Sprintf("%s: %s\n", name, task.Status)
+		status_map[name] = task.Status
 	}
 	return
 }
