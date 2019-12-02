@@ -12,6 +12,7 @@ const (
 	SUCCESS = "Successful"
 	NO_TASK = "NoTask"
 	FAIL    = "Fail"
+	SERIOUS = "Serious"
 	STOP    = "Stop"
 )
 
@@ -25,15 +26,6 @@ type goTask struct {
 	Step      int
 	Status    string
 	DownChan  chan int
-}
-
-func funGenerator(fun func(args ...interface{}) (interface{}, error), args []interface{}) (interface{}, error) {
-	defer func() {
-		if recover() != nil {
-			fmt.Println(fun, "serious mistake!")
-		}
-	}()
-	return fun(args...)
 }
 
 func new_OrderTask(task_name string, task_order string, cyclic bool, step int) (go_task *goTask) {
@@ -111,7 +103,7 @@ func (this *goTask) run() bool {
 			this.Status = NO_TASK
 			return false
 		} else {
-			if result, err = funGenerator(this.TaskFunc, this.TaskArgs); err != nil {
+			if result, err = this.funGenerator(); err != nil {
 				fmt.Println(fmt.Sprintf("%s: fail, error: %v", this.TakeName, err))
 				this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
 				return false
@@ -120,4 +112,17 @@ func (this *goTask) run() bool {
 			return true
 		}
 	}
+}
+
+func (this *goTask) funGenerator() (interface{}, error) {
+	defer func() {
+		if recover() != nil {
+			fmt.Println(this.TakeName, "serious mistake!")
+			this.Status = SERIOUS + "_" + time.Now().Format("2006/01/02/15:04")
+			if this.Cyclic {
+				this.DownChan <- 1
+			}
+		}
+	}()
+	return this.TaskFunc(this.TaskArgs...)
 }
