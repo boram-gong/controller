@@ -114,15 +114,17 @@ func (this *goTask) run() bool {
 	}
 }
 
-func (this *goTask) funGenerator() (interface{}, error) {
-	defer func(this *goTask) {
-		if recover() != nil {
-			fmt.Println(this.TakeName, "serious mistake!")
-			this.Status = SERIOUS + "_" + time.Now().Format("2006/01/02/15:04")
-			if this.Cyclic {
-				this.DownChan <- 1
-			}
+func (this *goTask) checkFunc() {
+	if recover() != nil {
+		fmt.Println(this.TakeName, "serious mistake!")
+		this.Status = SERIOUS + "_" + time.Now().Format("2006/01/02/15:04")
+		if this.Cyclic {
+			this.DownChan <- 1
 		}
-	}(this)
+	}
+}
+
+func (this *goTask) funGenerator() (interface{}, error) {
+	defer this.checkFunc()
 	return this.TaskFunc(this.TaskArgs...)
 }
