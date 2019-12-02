@@ -115,7 +115,7 @@ func (this *goTask) run() bool {
 }
 
 func (this *goTask) funGenerator() (interface{}, error) {
-	defer func() {
+	defer func(this *goTask) {
 		if recover() != nil {
 			fmt.Println(this.TakeName, "serious mistake!")
 			this.Status = SERIOUS + "_" + time.Now().Format("2006/01/02/15:04")
@@ -123,6 +123,6 @@ func (this *goTask) funGenerator() (interface{}, error) {
 				this.DownChan <- 1
 			}
 		}
-	}()
+	}(this)
 	return this.TaskFunc(this.TaskArgs...)
 }
