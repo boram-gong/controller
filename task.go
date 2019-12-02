@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+const (
+	INIT = "Init"
+	START = "Start"
+	SUCCESS = "Successful"
+	FAIL = "Fail"
+	STOP = "Stop"
+
+)
+
 type goTask struct {
 	sync.RWMutex
 	TakeName  string
@@ -22,18 +31,18 @@ func new_GoTask(task_name string, task_order string, cyclic bool, step int) (go_
 	go_task.TaskOrder = task_order
 	go_task.Cyclic = cyclic
 	go_task.Step = step
-	go_task.Status = "stop(init status)"
+	go_task.Status = INIT
 	go_task.DownChan = make(chan int, 1)
 	return
 }
 
 func (this *goTask) start() {
-	this.Status = "start"
+	this.Status = START
 	go func() {
 		for {
 			if !this.Cyclic {
 				if this.run() {
-					this.Status = "successful"
+					this.Status = SUCCESS
 				}
 				return
 			}
@@ -55,7 +64,7 @@ func (this *goTask) stop() {
 	}
 	this.DownChan <- 1
 	this.Lock()
-	this.Status = "stop(initiative stop)"
+	this.Status = STOP
 	this.Unlock()
 }
 
@@ -66,7 +75,7 @@ func (this *goTask) run() bool {
 	)
 	if out, err = cmdWork(this.TaskOrder); err != nil {
 		fmt.Println(fmt.Sprintf("%s(%s): stop, error: %v", this.TakeName, this.TaskOrder, err))
-		this.Status = "stop(order fail)"
+		this.Status = FAIL
 		return false
 	} else {
 		outDataChan <- outStringDeal(out)
