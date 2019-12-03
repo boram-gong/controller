@@ -42,6 +42,30 @@ func (this *GoPool) AppendFuncTake(task_name string, task_func func(args ...inte
 	this.Pool[task_name] = task
 }
 
+func (this *GoPool) ModifyOrder(task_name string, new_order string) error {
+	this.Lock()
+	defer this.Unlock()
+	task, ok := this.Pool[task_name]
+	if ok {
+		task.TaskOrder = new_order
+		return nil
+	} else {
+		return errors.New("don't have this task")
+	}
+}
+
+func (this *GoPool) ModifyArgs(task_name string, new_args []interface{}) error {
+	this.Lock()
+	defer this.Unlock()
+	task, ok := this.Pool[task_name]
+	if ok {
+		task.TaskArgs = new_args
+		return nil
+	} else {
+		return errors.New("don't have this task")
+	}
+}
+
 func (this *GoPool) DeleteTake(task_name string) {
 	this.Lock()
 	defer this.Unlock()
