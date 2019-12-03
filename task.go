@@ -12,7 +12,7 @@ const (
 	SUCCESS = "Successful"
 	NO_TASK = "NoTask"
 	FAIL    = "Fail"
-	SERIOUS = "Serious"
+	SERIOUS = "SeriousErr"
 	STOP    = "Stop"
 )
 
@@ -118,8 +118,9 @@ func (this *goTask) run() bool {
 
 func (this *goTask) funGenerator() (interface{}, error) {
 	defer func(g *goTask) {
-		if recover() != nil {
-			fmt.Println(g.TakeName, "serious mistake!")
+		serious_err := recover()
+		if serious_err != nil {
+			fmt.Println(g.TakeName, serious_err)
 			g.Status = SERIOUS
 			if g.Cyclic {
 				g.DownChan <- 1
