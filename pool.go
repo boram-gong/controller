@@ -17,6 +17,15 @@ func CloseMessagePoolChan() {
 	closeMessagePoolChan <- 1
 }
 
+func WaitDataFromMessagePool() (data interface{}, err error) {
+	select {
+	case data = <-outDataChan:
+		return
+	case <-closeMessagePoolChan:
+		return nil, errors.New("close")
+	}
+}
+
 type GoPool struct {
 	sync.RWMutex
 	Pool map[string]*goTask
@@ -143,15 +152,6 @@ func (this *GoPool) StopOneTask(task_name string) bool {
 	} else {
 		task.stop()
 		return true
-	}
-}
-
-func (this *GoPool) WaitDataFromMessagePool() (data interface{}, err error) {
-	select {
-	case data = <-outDataChan:
-		return
-	case <-closeMessagePoolChan:
-		return nil, errors.New("close")
 	}
 }
 
