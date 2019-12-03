@@ -57,7 +57,9 @@ func (this *goTask) start() {
 		for {
 			if !this.Cyclic {
 				if this.run() {
-					this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
+					if this.Status != SERIOUS {
+						this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
+					}
 				}
 				return
 			}
@@ -114,17 +116,15 @@ func (this *goTask) run() bool {
 	}
 }
 
-func (this *goTask) checkFunc() {
-	if recover() != nil {
-		fmt.Println(this.TakeName, "serious mistake!")
-		this.Status = SERIOUS + "_" + time.Now().Format("2006/01/02/15:04")
-		if this.Cyclic {
-			this.DownChan <- 1
-		}
-	}
-}
-
 func (this *goTask) funGenerator() (interface{}, error) {
-	defer this.checkFunc()
+	defer func(g *goTask) {
+		if recover() != nil {
+			fmt.Println(g.TakeName, "serious mistake!")
+			g.Status = SERIOUS
+			if g.Cyclic {
+				g.DownChan <- 1
+			}
+		}
+	}(this)
 	return this.TaskFunc(this.TaskArgs...)
 }
