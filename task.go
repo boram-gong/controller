@@ -104,8 +104,11 @@ func (this *goTask) run(ch chan []interface{}) bool {
 			this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
 			return false
 		} else {
+			if outStringDeal(out) == "" {
+				return true
+			}
 			r := []interface{}{}
-			r = append(r, outStringDeal(out))
+			r = append(r, this.TakeName, outStringDeal(out))
 			ch <- r
 			return true
 		}
@@ -153,6 +156,7 @@ func (this *goTask) funGenerator() []interface{} {
 		args = append(args, reflect.ValueOf(a))
 	}
 	returnValue = rFun.Call(args)
+	l = append(l, this.TakeName)
 	for _, r := range returnValue {
 		l = append(l, r.Interface())
 	}
