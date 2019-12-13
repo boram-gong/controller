@@ -38,6 +38,6 @@ func outStringDeal(str string) string {
 }
 
 func ArgsMaker(arg ...interface{}) (args []interface{}) {
-	args = append(args, arg)
+	args = append(args, arg...)
 	return
 }
