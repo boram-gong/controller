@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -21,7 +22,7 @@ type goTask struct {
 	TakeName  string
 	TaskOrder string
 	TaskArgs  []interface{}
-	TaskFunc  func(args ...interface{}) (interface{}, error)
+	TaskFunc  interface{}
 	Cyclic    bool
 	Step      int
 	Status    string
@@ -39,7 +40,7 @@ func new_OrderTask(task_name string, task_order string, cyclic bool, step int) (
 	return
 }
 
-func new_FuncTask(task_name string, task_func func(args ...interface{}) (interface{}, error), task_args []interface{}, cyclic bool, step int) (go_task *goTask) {
+func new_FuncTask(task_name string, task_func interface{}, task_args []interface{}, cyclic bool, step int) (go_task *goTask) {
 	go_task = new(goTask)
 	go_task.TakeName = task_name
 	go_task.TaskFunc = task_func
@@ -51,13 +52,17 @@ func new_FuncTask(task_name string, task_func func(args ...interface{}) (interfa
 	return
 }
 
-func (this *goTask) start() {
-	this.Status = START + "_" + time.Now().Format("2006/01/02/15:04")
+func (this *goTask) start(ch chan []interface{}) {
+	if this.Status == START {
+		LogChan <- fmt.Sprintf("Warn: '%v' task is running, don't to need run again", this.TakeName)
+		return
+	}
+	this.Status = START
 	go func() {
 		for {
 			if !this.Cyclic {
-				if this.run() {
-					if this.Status != SERIOUS {
+				if this.run(ch) {
+					if this.Status != SERIOUS && this.Status != NO_TASK {
 						this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
 					}
 				}
@@ -65,10 +70,12 @@ func (this *goTask) start() {
 			}
 			select {
 			case <-time.Tick(time.Duration(this.Step) * time.Second):
-				if !this.run() {
+				if !this.run(ch) {
+					LogChan <- fmt.Sprintf("Error: '%v' task running exception", this.TakeName)
 					return
 				}
 			case <-this.DownChan:
+				LogChan <- fmt.Sprintf("Info: '%v' task manual stop", this.TakeName)
 				return
 			}
 		}
@@ -85,47 +92,69 @@ func (this *goTask) stop() {
 	this.Unlock()
 }
 
-func (this *goTask) run() bool {
+func (this *goTask) run(ch chan []interface{}) bool {
 	var (
 		out    string
 		err    error
-		result interface{}
+		result []interface{}
 	)
 	if this.TaskOrder != "" {
 		if out, err = cmdWork(this.TaskOrder); err != nil {
-			fmt.Println(fmt.Sprintf("%s(%s): stop, error: %v", this.TakeName, this.TaskOrder, err))
+			LogChan <- fmt.Sprintf("Error: %s(%s) stop, error: %v", this.TakeName, this.TaskOrder, err)
 			this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
 			return false
 		} else {
-			outDataChan <- outStringDeal(out)
+			r := []interface{}{}
+			r = append(r, outStringDeal(out))
+			ch <- r
 			return true
 		}
 	} else {
 		if this.TaskFunc == nil {
+			LogChan <- fmt.Sprintf("Error: %s no task", this.TakeName)
 			this.Status = NO_TASK
 			return false
 		} else {
-			if result, err = this.funGenerator(); err != nil {
-				fmt.Println(fmt.Sprintf("%s: fail, error: %v", this.TakeName, err))
-				this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
+			result = this.funGenerator()
+			if this.Status == SERIOUS || this.Status == NO_TASK {
 				return false
 			}
-			outDataChan <- result
+			if len(result) != 0 {
+				ch <- result
+			}
 			return true
 		}
 	}
 }
 
-func (this *goTask) funGenerator() (interface{}, error) {
+func (this *goTask) funGenerator() []interface{} {
 	defer func(g *goTask) {
 		serious_err := recover()
 		if serious_err != nil {
-			fmt.Println(g.TakeName, serious_err)
+			LogChan <- fmt.Sprintf("Error: %s task fail: %v", this.TakeName, serious_err)
 			g.Status = SERIOUS
 			if g.Cyclic {
 				g.DownChan <- 1
 			}
 		}
 	}(this)
-	return this.TaskFunc(this.TaskArgs...)
+	var (
+		rFun              reflect.Value
+		args, returnValue []reflect.Value
+		l                 []interface{}
+	)
+	rFun = reflect.ValueOf(this.TaskFunc)
+	if rFun.Kind() != reflect.Func {
+		LogChan <- fmt.Sprintf("Error: %s no task", this.TakeName)
+		this.Status = NO_TASK
+		return l
+	}
+	for _, a := range this.TaskArgs {
+		args = append(args, reflect.ValueOf(a))
+	}
+	returnValue = rFun.Call(args)
+	for _, r := range returnValue {
+		l = append(l, r.Interface())
+	}
+	return l
 }
