@@ -22,7 +22,7 @@ func NewPool() (pool *GoPool) {
 	return
 }
 
-// 修改协程池的数据管道容量
+// 重设协程池的数据管道容量
 func (this *GoPool) ResetMessagePool(length int) {
 	this.OutDataChan = nil
 	this.OutDataChan = make(chan []interface{}, length)

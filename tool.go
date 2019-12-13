@@ -27,13 +27,17 @@ func cmdWork(shell string) (string, error) {
 			return "", err
 		}
 	} else {
-		return "", errors.New("this system <"+system+"> is not supported")
+		return "", errors.New("this system <" + system + "> is not supported")
 	}
-
 
 	return string(output), nil
 }
 
 func outStringDeal(str string) string {
 	return strings.Split(str, "\n")[0]
+}
+
+func ArgsMaker(arg ...interface{}) (args []interface{}) {
+	args = append(args, arg)
+	return
 }
