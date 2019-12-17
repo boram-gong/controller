@@ -88,9 +88,12 @@ func (this *goTask) stop(stat chan []string) {
 	if !this.Cyclic {
 		return
 	}
+	if this.Status == STOP {
+		return
+	}
 	this.DownChan <- 1
 	this.Lock()
-	this.Status = STOP + "_" + time.Now().Format("2006/01/02/15:04")
+	this.Status = STOP
 	this.Unlock()
 	stat <- []string{this.TakeName, this.Status}
 }
