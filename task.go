@@ -52,25 +52,27 @@ func new_FuncTask(task_name string, task_func interface{}, task_args []interface
 	return
 }
 
-func (this *goTask) start(ch chan []interface{}) {
+func (this *goTask) start(ch chan []interface{}, stat chan []string) {
 	if this.Status == START {
 		LogChan <- fmt.Sprintf("Warn: '%v' task is running, don't to need run again", this.TakeName)
 		return
 	}
 	this.Status = START
+	stat <- []string{this.TakeName, this.Status}
 	go func() {
 		for {
 			if !this.Cyclic {
-				if this.run(ch) {
+				if this.run(ch, stat) {
 					if this.Status != SERIOUS && this.Status != NO_TASK {
 						this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
+						stat <- []string{this.TakeName, this.Status}
 					}
 				}
 				return
 			}
 			select {
 			case <-time.Tick(time.Duration(this.Step) * time.Second):
-				if !this.run(ch) {
+				if !this.run(ch, stat) {
 					LogChan <- fmt.Sprintf("Error: '%v' task running exception", this.TakeName)
 					return
 				}
@@ -82,7 +84,7 @@ func (this *goTask) start(ch chan []interface{}) {
 	}()
 }
 
-func (this *goTask) stop() {
+func (this *goTask) stop(stat chan []string) {
 	if !this.Cyclic {
 		return
 	}
@@ -90,9 +92,10 @@ func (this *goTask) stop() {
 	this.Lock()
 	this.Status = STOP + "_" + time.Now().Format("2006/01/02/15:04")
 	this.Unlock()
+	stat <- []string{this.TakeName, this.Status}
 }
 
-func (this *goTask) run(ch chan []interface{}) bool {
+func (this *goTask) run(ch chan []interface{}, stat chan []string) bool {
 	var (
 		out    string
 		err    error
@@ -102,6 +105,7 @@ func (this *goTask) run(ch chan []interface{}) bool {
 		if out, err = cmdWork(this.TaskOrder); err != nil {
 			LogChan <- fmt.Sprintf("Error: %s(%s) stop, error: %v", this.TakeName, this.TaskOrder, err)
 			this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
+			stat <- []string{this.TakeName, this.Status}
 			return false
 		} else {
 			if outStringDeal(out) == "" {
@@ -116,10 +120,12 @@ func (this *goTask) run(ch chan []interface{}) bool {
 		if this.TaskFunc == nil {
 			LogChan <- fmt.Sprintf("Error: %s no task", this.TakeName)
 			this.Status = NO_TASK
+			stat <- []string{this.TakeName, this.Status}
 			return false
 		} else {
 			result = this.funGenerator()
 			if this.Status == SERIOUS || this.Status == NO_TASK {
+				stat <- []string{this.TakeName, this.Status}
 				return false
 			}
 			if len(result) != 0 {

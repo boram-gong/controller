@@ -12,6 +12,7 @@ type GoPool struct {
 	sync.RWMutex
 	Pool        map[string]*goTask
 	OutDataChan chan []interface{}
+	StatChan    chan []string
 }
 
 // new一个协程池
@@ -19,6 +20,7 @@ func NewPool() (pool *GoPool) {
 	pool = new(GoPool)
 	pool.Pool = make(map[string]*goTask)
 	pool.OutDataChan = make(chan []interface{}, 1000)
+	pool.StatChan = make(chan []string, 1000)
 	return
 }
 
@@ -78,7 +80,7 @@ func (this *GoPool) DeleteTake(task_name string) {
 	defer this.Unlock()
 	task, ok := this.Pool[task_name]
 	if ok {
-		task.stop()
+		task.stop(this.StatChan)
 	}
 	delete(this.Pool, task_name)
 }
@@ -88,7 +90,7 @@ func (this *GoPool) DeleteAllTake() {
 	this.Lock()
 	defer this.Unlock()
 	for _, task := range this.Pool {
-		task.stop()
+		task.stop(this.StatChan)
 	}
 	this.Pool = nil
 	this.Pool = make(map[string]*goTask)
@@ -99,7 +101,7 @@ func (this *GoPool) StartAllTake() {
 	this.RLock()
 	defer this.RUnlock()
 	for _, task := range this.Pool {
-		task.start(this.OutDataChan)
+		task.start(this.OutDataChan, this.StatChan)
 	}
 }
 
@@ -111,7 +113,7 @@ func (this *GoPool) StartOneTask(task_name string) bool {
 	if !ok {
 		return false
 	} else {
-		task.start(this.OutDataChan)
+		task.start(this.OutDataChan, this.StatChan)
 		return true
 	}
 }
@@ -122,7 +124,7 @@ func (this *GoPool) StartCyclicTask() {
 	defer this.RUnlock()
 	for _, task := range this.Pool {
 		if task.Cyclic {
-			task.start(this.OutDataChan)
+			task.start(this.OutDataChan, this.StatChan)
 		}
 	}
 }
@@ -133,7 +135,7 @@ func (this *GoPool) StartSingleTask() {
 	defer this.RUnlock()
 	for _, task := range this.Pool {
 		if !task.Cyclic {
-			task.start(this.OutDataChan)
+			task.start(this.OutDataChan, this.StatChan)
 		}
 	}
 }
@@ -143,7 +145,7 @@ func (this *GoPool) StopAllTake() {
 	this.RLock()
 	defer this.RUnlock()
 	for _, task := range this.Pool {
-		task.stop()
+		task.stop(this.StatChan)
 	}
 }
 
@@ -155,20 +157,28 @@ func (this *GoPool) StopOneTask(task_name string) bool {
 	if !ok {
 		return false
 	} else {
-		task.stop()
+		task.stop(this.StatChan)
 		return true
 	}
 }
 
-// 查询指定任务的任务状态
-func (this *GoPool) QueryTaskState(task_name string) string {
+// 查询指定任务的任务属性
+func (this *GoPool) QueryTaskProperty(task_name string) map[string]interface{} {
 	this.RLock()
 	defer this.RUnlock()
 	task, ok := this.Pool[task_name]
 	if ok {
-		return task.Status
+		m := make(map[string]interface{})
+		m["TaskName"] = task.TakeName
+		m["Status"] = task.Status
+		m["TaskOrder"] = task.TaskOrder
+		m["TaskFunc"] = task.TaskFunc
+		m["TaskArgs"] = task.TaskArgs
+		m["Cyclic"] = task.Cyclic
+		m["Step"] = task.Step
+		return m
 	} else {
-		return "don't have this task"
+		return nil
 	}
 }
 
