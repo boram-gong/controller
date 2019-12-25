@@ -26,10 +26,11 @@ type goTask struct {
 	Cyclic    bool
 	Step      int
 	Status    string
+	Note      string
 	DownChan  chan int
 }
 
-func new_OrderTask(task_name string, task_order string, cyclic bool, step int) (go_task *goTask) {
+func new_OrderTask(task_name string, task_order string, cyclic bool, step int, note string) (go_task *goTask) {
 	go_task = new(goTask)
 	go_task.TakeName = task_name
 	go_task.TaskOrder = task_order
@@ -37,10 +38,11 @@ func new_OrderTask(task_name string, task_order string, cyclic bool, step int) (
 	go_task.Step = step
 	go_task.Status = INIT
 	go_task.DownChan = make(chan int, 1)
+	go_task.Note = note
 	return
 }
 
-func new_FuncTask(task_name string, task_func interface{}, task_args []interface{}, cyclic bool, step int) (go_task *goTask) {
+func new_FuncTask(task_name string, task_func interface{}, task_args []interface{}, cyclic bool, step int, note string) (go_task *goTask) {
 	go_task = new(goTask)
 	go_task.TakeName = task_name
 	go_task.TaskFunc = task_func
@@ -49,6 +51,7 @@ func new_FuncTask(task_name string, task_func interface{}, task_args []interface
 	go_task.Step = step
 	go_task.Status = INIT
 	go_task.DownChan = make(chan int, 1)
+	go_task.Note = note
 	return
 }
 

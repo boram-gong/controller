@@ -31,16 +31,16 @@ func (this *GoPool) ResetMessagePool(length int) {
 }
 
 // 添加一个指令型任务
-func (this *GoPool) AppendOrderTake(task_name string, task_order string, cyclic bool, step int) {
-	task := new_OrderTask(task_name, task_order, cyclic, step)
+func (this *GoPool) AppendOrderTake(task_name string, task_order string, cyclic bool, step int, note string) {
+	task := new_OrderTask(task_name, task_order, cyclic, step, note)
 	this.Lock()
 	defer this.Unlock()
 	this.Pool[task_name] = task
 }
 
 // 添加一个函数型任务
-func (this *GoPool) AppendFuncTake(task_name string, task_func interface{}, task_args []interface{}, cyclic bool, step int) {
-	task := new_FuncTask(task_name, task_func, task_args, cyclic, step)
+func (this *GoPool) AppendFuncTake(task_name string, task_func interface{}, task_args []interface{}, cyclic bool, step int, note string) {
+	task := new_FuncTask(task_name, task_func, task_args, cyclic, step, note)
 	this.Lock()
 	defer this.Unlock()
 	this.Pool[task_name] = task
@@ -194,4 +194,12 @@ func (this *GoPool) QueryAllTaskState() (status_map map[string]string) {
 		status_map[name] = task.Status
 	}
 	return
+}
+
+// 查询指定任务的任务属性
+func (this *GoPool) QueryTaskNote(task_name string) (string, bool) {
+	this.RLock()
+	defer this.RUnlock()
+	task, ok := this.Pool[task_name]
+	return task.Note, ok
 }
