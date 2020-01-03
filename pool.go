@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/pkg/errors"
+	"errors"
 	"sync"
 )
 
