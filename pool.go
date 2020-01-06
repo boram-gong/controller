@@ -31,8 +31,8 @@ func (this *GoPool) ResetMessagePool(length int) {
 }
 
 // 添加一个指令型任务
-func (this *GoPool) AppendOrderTake(task_name string, task_order string, cyclic bool, step int, note interface{}) {
-	task := new_OrderTask(task_name, task_order, cyclic, step, note)
+func (this *GoPool) AppendOrderTake(task_name string, task_order string, cyclic bool, step int, time_out int, note interface{}) {
+	task := new_OrderTask(task_name, task_order, cyclic, step, time_out, note)
 	this.Lock()
 	defer this.Unlock()
 	this.Pool[task_name] = task

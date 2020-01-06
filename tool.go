@@ -5,32 +5,60 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 var system = runtime.GOOS
 
-func cmdWork(shell string) (string, error) {
+func cmdWork(shell string, sec int) (string, error) {
 	var (
-		cmd    *exec.Cmd
-		output []byte
-		err    error
+		done     = make(chan error, 1)
+		content  = make(chan []byte, 1)
+		time_out = time.Duration(time.Duration(sec) * time.Second)
 	)
-
 	if system == "linux" {
-		cmd = exec.Command("/bin/bash", "-c", shell)
-		if output, err = cmd.CombinedOutput(); err != nil {
-			return "", err
-		}
+		go func() {
+			cmd := exec.Command("/bin/bash", "-c", shell)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				done <- err
+				return
+			}
+			content <- output
+		}()
 	} else if system == "windows" {
-		cmd = exec.Command("CMD", "/C", shell)
-		if output, err = cmd.CombinedOutput(); err != nil {
+		go func() {
+			cmd := exec.Command("CMD", "/C", shell)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				done <- err
+				return
+			}
+			content <- output
+		}()
+	} else {
+		done <- errors.New("this system <" + system + "> is not supported")
+	}
+	if sec <= 0 {
+		select {
+		case err := <-done:
 			return "", err
+
+		case out := <-content:
+			return string(out), nil
 		}
 	} else {
-		return "", errors.New("this system <" + system + "> is not supported")
-	}
+		select {
+		case <-time.After(time_out):
+			return "", errors.New(TimeOut)
 
-	return string(output), nil
+		case err := <-done:
+			return "", err
+
+		case out := <-content:
+			return string(out), nil
+		}
+	}
 }
 
 func outStringDeal(str string) string {

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -13,6 +14,7 @@ const (
 	SUCCESS = "Successful"
 	NO_TASK = "NoTask"
 	FAIL    = "Fail"
+	TimeOut = "TimeOut"
 	SERIOUS = "SeriousErr"
 	STOP    = "Stop"
 )
@@ -26,11 +28,12 @@ type goTask struct {
 	Cyclic    bool
 	Step      int
 	Status    string
+	TimeOut   int
 	Note      interface{}
 	DownChan  chan int
 }
 
-func new_OrderTask(task_name string, task_order string, cyclic bool, step int, note interface{}) (go_task *goTask) {
+func new_OrderTask(task_name string, task_order string, cyclic bool, step int, time_out int, note interface{}) (go_task *goTask) {
 	go_task = new(goTask)
 	go_task.TakeName = task_name
 	go_task.TaskOrder = task_order
@@ -38,6 +41,7 @@ func new_OrderTask(task_name string, task_order string, cyclic bool, step int, n
 	go_task.Step = step
 	go_task.Status = INIT
 	go_task.DownChan = make(chan int, 1)
+	go_task.TimeOut = time_out
 	go_task.Note = note
 	return
 }
@@ -108,9 +112,13 @@ func (this *goTask) run(ch chan []interface{}, stat chan []string) bool {
 		result []interface{}
 	)
 	if this.TaskOrder != "" {
-		if out, err = cmdWork(this.TaskOrder); err != nil {
+		if out, err = cmdWork(this.TaskOrder, this.TimeOut); err != nil {
 			LogChan <- fmt.Sprintf("Error: %s(%s) stop, error: %v", this.TakeName, this.TaskOrder, err)
-			this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
+			if err == errors.New(TimeOut) {
+				this.Status = TimeOut
+			} else {
+				this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
+			}
 			stat <- []string{this.TakeName, this.Status}
 			return false
 		} else {
