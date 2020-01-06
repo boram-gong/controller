@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -114,7 +113,7 @@ func (this *goTask) run(ch chan []interface{}, stat chan []string) bool {
 	if this.TaskOrder != "" {
 		if out, err = cmdWork(this.TaskOrder, this.TimeOut); err != nil {
 			LogChan <- fmt.Sprintf("Error: %s(%s) stop, error: %v", this.TakeName, this.TaskOrder, err)
-			if err == errors.New(TimeOut) {
+			if fmt.Sprintf("%v", err) == TimeOut {
 				this.Status = TimeOut
 			} else {
 				this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
