@@ -153,7 +153,7 @@ func (this *goTask) funGenerator() []interface{} {
 	defer func(g *goTask) {
 		serious_err := recover()
 		if serious_err != nil {
-			LogChan <- fmt.Sprintf("Error: %s task fail: %v", this.TakeName, serious_err)
+			LogChan <- fmt.Sprintf("Error: %s task fail: %v", g.TakeName, serious_err)
 			g.Status = SERIOUS
 			if g.Cyclic {
 				g.DownChan <- 1
