@@ -65,29 +65,31 @@ func (this *goTask) start(ch chan []interface{}, stat chan []string) {
 	}
 	this.Status = START
 	stat <- []string{this.TakeName, this.Status}
-	go func() {
-		for {
-			if !this.Cyclic {
-				if this.run(ch, stat) {
-					if this.Status != SERIOUS && this.Status != NO_TASK {
-						this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
-						stat <- []string{this.TakeName, this.Status}
-					}
+	go this.work(ch, stat)
+}
+
+func (this *goTask) work(ch chan []interface{}, stat chan []string) {
+	for {
+		if !this.Cyclic {
+			if this.run(ch, stat) {
+				if this.Status != SERIOUS && this.Status != NO_TASK {
+					this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
+					stat <- []string{this.TakeName, this.Status}
 				}
-				return
 			}
-			select {
-			case <-time.Tick(time.Duration(this.Step) * time.Second):
-				if !this.run(ch, stat) {
-					LogChan <- fmt.Sprintf("Error: '%v' task running exception", this.TakeName)
-					return
-				}
-			case <-this.DownChan:
-				LogChan <- fmt.Sprintf("Info: '%v' task manual stop", this.TakeName)
-				return
-			}
+			return
 		}
-	}()
+		select {
+		case <-time.Tick(time.Duration(this.Step) * time.Second):
+			if !this.run(ch, stat) {
+				LogChan <- fmt.Sprintf("Error: '%v' task running exception", this.TakeName)
+				return
+			}
+		case <-this.DownChan:
+			LogChan <- fmt.Sprintf("Info: '%v' task manual stop", this.TakeName)
+			return
+		}
+	}
 }
 
 func (this *goTask) stop(stat chan []string) {
