@@ -65,7 +65,7 @@ func outStringDeal(str string) string {
 	if system == "linux" {
 		return strings.Split(str, "\n")[0]
 	} else {
-		return strings.Split(str, "\r")[0]
+		return strings.Split(strings.Split(str, "\r")[0], "\n")[0]
 	}
 
 }
