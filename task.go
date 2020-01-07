@@ -123,11 +123,11 @@ func (this *goTask) run(ch chan []interface{}, stat chan []string) bool {
 			stat <- []string{this.TakeName, this.Status}
 			return false
 		} else {
-			if outStringDeal(out) == "" {
+			if out == "" {
 				return true
 			}
 			r := []interface{}{}
-			r = append(r, this.TakeName, outStringDeal(out))
+			r = append(r, this.TakeName, out)
 			ch <- r
 			return true
 		}

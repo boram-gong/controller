@@ -45,7 +45,7 @@ func cmdWork(shell string, sec int) (string, error) {
 			return "", err
 
 		case out := <-content:
-			return string(out), nil
+			return outStringDeal(string(out)), nil
 		}
 	} else {
 		select {
@@ -56,13 +56,18 @@ func cmdWork(shell string, sec int) (string, error) {
 			return "", err
 
 		case out := <-content:
-			return string(out), nil
+			return outStringDeal(string(out)), nil
 		}
 	}
 }
 
 func outStringDeal(str string) string {
-	return strings.Split(str, "\n")[0]
+	if system == "linux" {
+		return strings.Split(str, "\n")[0]
+	} else {
+		return strings.Split(str, "\r")[0]
+	}
+
 }
 
 func ArgsMaker(arg ...interface{}) (args []interface{}) {
