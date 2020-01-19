@@ -19,7 +19,7 @@ func cmdWork(shell string, sec int) (string, error) {
 	if system == "linux" {
 		go func() {
 			cmd := exec.Command("/bin/bash", "-c", shell)
-			output, err := cmd.CombinedOutput()
+			output, err := cmd.Output()
 			if err != nil {
 				done <- err
 				return
@@ -29,7 +29,7 @@ func cmdWork(shell string, sec int) (string, error) {
 	} else if system == "windows" {
 		go func() {
 			cmd := exec.Command("CMD", "/C", shell)
-			output, err := cmd.CombinedOutput()
+			output, err := cmd.Output()
 			if err != nil {
 				done <- err
 				return
@@ -63,7 +63,11 @@ func cmdWork(shell string, sec int) (string, error) {
 
 func outStringDeal(str string) string {
 	if system == "linux" {
-		return strings.Split(str, "\n")[0]
+		if str[len(str)-1:] == "\n" {
+			return str[:len(str)-1]
+		} else {
+			return str
+		}
 	} else {
 		return strings.Split(strings.Split(str, "\r")[0], "\n")[0]
 	}
