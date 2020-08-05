@@ -69,16 +69,16 @@ func (this *goTask) start(ch chan []interface{}, stat chan []string) {
 }
 
 func (this *goTask) work(ch chan []interface{}, stat chan []string) {
-	for {
-		if !this.Cyclic {
-			if this.run(ch, stat) {
-				if this.Status != SERIOUS && this.Status != NO_TASK {
-					this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
-					stat <- []string{this.TakeName, this.Status}
-				}
-			}
-			return
+	if this.run(ch, stat) {
+		if this.Status != SERIOUS && this.Status != NO_TASK && !this.Cyclic {
+			this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
+			stat <- []string{this.TakeName, this.Status}
 		}
+	}
+	if !this.Cyclic {
+		return
+	}
+	for {
 		select {
 		case <-time.Tick(time.Duration(this.Step) * time.Second):
 			if !this.run(ch, stat) {
