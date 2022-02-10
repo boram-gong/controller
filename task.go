@@ -12,7 +12,6 @@ const (
 	START   = "Start"
 	SUCCESS = "Successful"
 	FAIL    = "Fail"
-	TimeOut = "TimeOut"
 	SERIOUS = "SeriousErr"
 	STOP    = "Stop"
 )
