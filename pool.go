@@ -1,206 +1,163 @@
 package controller
 
 import (
-	"errors"
 	"sync"
 )
 
 var LogChan = make(chan string, 1000)
 
-// 协程池结构体
-
-type GoPool struct {
+type TaskPool struct {
 	sync.RWMutex
 	Pool        map[string]*goTask
 	OutDataChan chan []interface{}
-	StatChan    chan []string
 }
 
-// new一个协程池
-func NewPool() (pool *GoPool) {
-	pool = new(GoPool)
+func NewPool() (pool *TaskPool) {
+	pool = new(TaskPool)
 	pool.Pool = make(map[string]*goTask)
 	pool.OutDataChan = make(chan []interface{}, 1000)
-	pool.StatChan = make(chan []string, 1000)
 	return
 }
 
-// 重设协程池的数据管道容量
-func (this *GoPool) ResetMessagePool(length int) {
-	this.OutDataChan = nil
-	this.OutDataChan = make(chan []interface{}, length)
+func (p *TaskPool) ResetMessagePool(length int) {
+	p.OutDataChan = nil
+	p.OutDataChan = make(chan []interface{}, length)
 }
 
-// 添加一个指令型任务
-func (this *GoPool) AppendOrderTake(task_name string, task_order string, cyclic bool, step int, time_out int, note interface{}) {
-	task := new_OrderTask(task_name, task_order, cyclic, step, time_out, note)
-	this.Lock()
-	defer this.Unlock()
-	this.Pool[task_name] = task
+func (p *TaskPool) AppendFuncTake(taskName string, fun interface{}, args []interface{}, note interface{}) {
+	task := newGoTask(taskName, fun, args, false, 0, note)
+	p.Lock()
+	defer p.Unlock()
+	p.Pool[taskName] = task
 }
 
-// 添加一个函数型任务
-func (this *GoPool) AppendFuncTake(task_name string, task_func interface{}, task_args []interface{}, cyclic bool, step int, note interface{}) {
-	task := new_FuncTask(task_name, task_func, task_args, cyclic, step, note)
-	this.Lock()
-	defer this.Unlock()
-	this.Pool[task_name] = task
+func (p *TaskPool) AppendCyclicFuncTake(taskName string, fun interface{}, args []interface{}, cyclic bool, step int, note interface{}) {
+	task := newGoTask(taskName, fun, args, cyclic, step, note)
+	p.Lock()
+	defer p.Unlock()
+	p.Pool[taskName] = task
 }
 
-// 修改命令
-func (this *GoPool) ModifyOrder(task_name string, new_order string) error {
-	this.Lock()
-	defer this.Unlock()
-	task, ok := this.Pool[task_name]
+func (p *TaskPool) DeleteTake(taskName string) {
+	p.Lock()
+	defer p.Unlock()
+	task, ok := p.Pool[taskName]
 	if ok {
-		task.TaskOrder = new_order
-		this.Pool[task_name] = task
-		return nil
-	} else {
-		return errors.New("don't have this task")
+		task.stop()
+	}
+	delete(p.Pool, taskName)
+}
+
+func (p *TaskPool) DeleteAllTake() {
+	p.Lock()
+	defer p.Unlock()
+	for _, task := range p.Pool {
+		task.stop()
+	}
+	p.Pool = nil
+	p.Pool = make(map[string]*goTask)
+}
+
+func (p *TaskPool) StartAllTake() {
+	p.RLock()
+	defer p.RUnlock()
+	for _, task := range p.Pool {
+		task.start(p.OutDataChan)
 	}
 }
 
-// 修改参数
-func (this *GoPool) ModifyArgs(task_name string, new_args []interface{}) error {
-	this.Lock()
-	defer this.Unlock()
-	task, ok := this.Pool[task_name]
-	if ok {
-		task.TaskArgs = new_args
-		this.Pool[task_name] = task
-		return nil
-	} else {
-		return errors.New("don't have this task")
-	}
-}
-
-// 删除指定任务
-func (this *GoPool) DeleteTake(task_name string) {
-	this.Lock()
-	defer this.Unlock()
-	task, ok := this.Pool[task_name]
-	if ok {
-		task.stop(this.StatChan)
-	}
-	delete(this.Pool, task_name)
-}
-
-// 删除全部任务
-func (this *GoPool) DeleteAllTake() {
-	this.Lock()
-	defer this.Unlock()
-	for _, task := range this.Pool {
-		task.stop(this.StatChan)
-	}
-	this.Pool = nil
-	this.Pool = make(map[string]*goTask)
-}
-
-// 启动全部任务
-func (this *GoPool) StartAllTake() {
-	this.RLock()
-	defer this.RUnlock()
-	for _, task := range this.Pool {
-		task.start(this.OutDataChan, this.StatChan)
-	}
-}
-
-// 启动指定任务
-func (this *GoPool) StartOneTask(task_name string) bool {
-	this.RLock()
-	defer this.RUnlock()
-	task, ok := this.Pool[task_name]
+func (p *TaskPool) StartOneTask(taskName string) bool {
+	p.RLock()
+	defer p.RUnlock()
+	task, ok := p.Pool[taskName]
 	if !ok {
 		return false
 	} else {
-		task.start(this.OutDataChan, this.StatChan)
+		task.start(p.OutDataChan)
 		return true
 	}
 }
 
-// 启动所有循环任务
-func (this *GoPool) StartCyclicTask() {
-	this.RLock()
-	defer this.RUnlock()
-	for _, task := range this.Pool {
+func (p *TaskPool) StartAllCyclicTask() {
+	p.RLock()
+	defer p.RUnlock()
+	for _, task := range p.Pool {
 		if task.Cyclic {
-			task.start(this.OutDataChan, this.StatChan)
+			task.start(p.OutDataChan)
 		}
 	}
 }
 
-// 启动所有单次任务
-func (this *GoPool) StartSingleTask() {
-	this.RLock()
-	defer this.RUnlock()
-	for _, task := range this.Pool {
+func (p *TaskPool) StartAllNotCyclicTask() {
+	p.RLock()
+	defer p.RUnlock()
+	for _, task := range p.Pool {
 		if !task.Cyclic {
-			task.start(this.OutDataChan, this.StatChan)
+			task.start(p.OutDataChan)
 		}
 	}
 }
 
-// 停止所有任务
-func (this *GoPool) StopAllTake() {
-	this.RLock()
-	defer this.RUnlock()
-	for _, task := range this.Pool {
-		task.stop(this.StatChan)
+func (p *TaskPool) StopAllTake() {
+	p.RLock()
+	defer p.RUnlock()
+	for _, task := range p.Pool {
+		task.stop()
 	}
 }
 
-// 停止指定任务
-func (this *GoPool) StopOneTask(task_name string) bool {
-	this.RLock()
-	defer this.RUnlock()
-	task, ok := this.Pool[task_name]
+func (p *TaskPool) StopOneTask(taskName string) bool {
+	p.RLock()
+	defer p.RUnlock()
+	task, ok := p.Pool[taskName]
 	if !ok {
 		return false
 	} else {
-		task.stop(this.StatChan)
+		task.stop()
 		return true
 	}
 }
 
-// 查询指定任务的任务属性
-func (this *GoPool) QueryTaskProperty(task_name string) map[string]interface{} {
-	this.RLock()
-	defer this.RUnlock()
-	task, ok := this.Pool[task_name]
+func (p *TaskPool) QueryTaskProperty(taskName string) map[string]interface{} {
+	p.RLock()
+	defer p.RUnlock()
+	task, ok := p.Pool[taskName]
 	if ok {
 		m := make(map[string]interface{})
 		m["TaskName"] = task.TakeName
 		m["Status"] = task.Status
-		m["TaskOrder"] = task.TaskOrder
-		m["TaskFunc"] = task.TaskFunc
-		m["TaskArgs"] = task.TaskArgs
+		m["Operate"] = task.Operate
+		m["TaskArgs"] = task.Args
 		m["Cyclic"] = task.Cyclic
 		m["Step"] = task.Step
+		m["Result"] = task.Result
 		return m
 	} else {
 		return nil
 	}
 }
 
-// 查询所有任务状态
-func (this *GoPool) QueryAllTaskState() (status_map map[string]string) {
-	this.RLock()
-	defer this.RUnlock()
-	status_map = make(map[string]string)
-	if len(this.Pool) == 0 {
+func (p *TaskPool) QueryAllTaskState() (status map[string]string) {
+	p.RLock()
+	defer p.RUnlock()
+	status = make(map[string]string)
+	if len(p.Pool) == 0 {
 		return
 	}
-	for name, task := range this.Pool {
-		status_map[name] = task.Status
+	for name, task := range p.Pool {
+		status[name] = task.Status
 	}
 	return
 }
 
-// 查询指定任务的任务属性
-func (this *GoPool) QueryTaskNote(task_name string) (interface{}, bool) {
-	this.RLock()
-	defer this.RUnlock()
-	task, ok := this.Pool[task_name]
+func (p *TaskPool) QueryTaskNote(taskName string) (interface{}, bool) {
+	p.RLock()
+	defer p.RUnlock()
+	task, ok := p.Pool[taskName]
 	return task.Note, ok
+}
+
+func ArgsMaker(arg ...interface{}) (args []interface{}) {
+	args = append(args, arg...)
+	return
 }

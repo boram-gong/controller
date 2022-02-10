@@ -11,7 +11,6 @@ const (
 	INIT    = "Init"
 	START   = "Start"
 	SUCCESS = "Successful"
-	NO_TASK = "NoTask"
 	FAIL    = "Fail"
 	TimeOut = "TimeOut"
 	SERIOUS = "SeriousErr"
@@ -20,166 +19,121 @@ const (
 
 type goTask struct {
 	sync.RWMutex
-	TakeName  string
-	TaskOrder string
-	TaskArgs  []interface{}
-	TaskFunc  interface{}
-	Cyclic    bool
-	Step      int
-	Status    string
-	TimeOut   int
-	Note      interface{}
-	DownChan  chan int
+	TakeName string
+	Args     []interface{}
+	Operate  interface{}
+	Cyclic   bool
+	Step     int
+	Status   string
+	Note     interface{}
+	DownChan chan int
+	Result   []interface{}
 }
 
-func new_OrderTask(task_name string, task_order string, cyclic bool, step int, time_out int, note interface{}) (go_task *goTask) {
-	go_task = new(goTask)
-	go_task.TakeName = task_name
-	go_task.TaskOrder = task_order
-	go_task.Cyclic = cyclic
-	go_task.Step = step
-	go_task.Status = INIT
-	go_task.DownChan = make(chan int, 1)
-	go_task.TimeOut = time_out
-	go_task.Note = note
+func newGoTask(taskName string, fun interface{}, args []interface{}, cyclic bool, step int, note interface{}) (task *goTask) {
+	task = new(goTask)
+	task.TakeName = taskName
+	task.Operate = fun
+	task.Args = args
+	task.Cyclic = cyclic
+	task.Step = step
+	task.Status = INIT
+	task.DownChan = make(chan int, 1)
+	task.Note = note
 	return
 }
 
-func new_FuncTask(task_name string, task_func interface{}, task_args []interface{}, cyclic bool, step int, note interface{}) (go_task *goTask) {
-	go_task = new(goTask)
-	go_task.TakeName = task_name
-	go_task.TaskFunc = task_func
-	go_task.TaskArgs = task_args
-	go_task.Cyclic = cyclic
-	go_task.Step = step
-	go_task.Status = INIT
-	go_task.DownChan = make(chan int, 1)
-	go_task.Note = note
-	return
-}
-
-func (this *goTask) start(ch chan []interface{}, stat chan []string) {
-	if this.Status == START {
-		LogChan <- fmt.Sprintf("Warn: '%v' task is running, don't to need run again", this.TakeName)
+func (gt *goTask) start(ch chan []interface{}) {
+	if gt.Status == START {
+		LogChan <- fmt.Sprintf("WARN: '%v' task is running, don't to need run again", gt.TakeName)
 		return
 	}
-	this.Status = START
-	stat <- []string{this.TakeName, this.Status}
-	go this.work(ch, stat)
+	gt.Status = START
+	go gt.work(ch)
 }
 
-func (this *goTask) work(ch chan []interface{}, stat chan []string) {
-	if this.run(ch, stat) {
-		if this.Status != SERIOUS && this.Status != NO_TASK && !this.Cyclic {
-			this.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
-			stat <- []string{this.TakeName, this.Status}
+func (gt *goTask) work(ch chan []interface{}) {
+	if gt.run(ch) {
+		if gt.Status != SERIOUS && gt.Status != FAIL && !gt.Cyclic {
+			gt.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
 		}
 	}
-	if !this.Cyclic {
+	if !gt.Cyclic {
 		return
 	}
 	for {
 		select {
-		case <-time.Tick(time.Duration(this.Step) * time.Second):
-			if !this.run(ch, stat) {
-				LogChan <- fmt.Sprintf("Error: '%v' task running exception", this.TakeName)
+		case <-time.Tick(time.Duration(gt.Step) * time.Second):
+			if !gt.run(ch) {
 				return
 			}
-		case <-this.DownChan:
-			LogChan <- fmt.Sprintf("Info: '%v' task manual stop", this.TakeName)
+		case <-gt.DownChan:
+			LogChan <- fmt.Sprintf("INFO: '%v' task manual stop", gt.TakeName)
 			return
 		}
 	}
 }
 
-func (this *goTask) stop(stat chan []string) {
-	if !this.Cyclic {
+func (gt *goTask) stop() {
+	if !gt.Cyclic {
 		return
 	}
-	if this.Status == STOP {
+	if gt.Status == STOP {
 		return
 	}
-	this.DownChan <- 1
-	this.Lock()
-	this.Status = STOP
-	this.Unlock()
-	stat <- []string{this.TakeName, this.Status}
+	gt.DownChan <- 1
+	gt.Lock()
+	gt.Status = STOP
+	gt.Unlock()
 }
 
-func (this *goTask) run(ch chan []interface{}, stat chan []string) bool {
+func (gt *goTask) run(ch chan []interface{}) bool {
 	var (
-		out    string
-		err    error
 		result []interface{}
 	)
-	if this.TaskOrder != "" {
-		if out, err = cmdWork(this.TaskOrder, this.TimeOut); err != nil {
-			LogChan <- fmt.Sprintf("Error: %s(%s) stop, error: %v", this.TakeName, this.TaskOrder, err)
-			if fmt.Sprintf("%v", err) == TimeOut {
-				this.Status = TimeOut
-			} else {
-				this.Status = FAIL + "_" + time.Now().Format("2006/01/02/15:04")
-			}
-			stat <- []string{this.TakeName, this.Status}
-			return false
-		} else {
-			if out == "" {
-				return true
-			}
-			r := []interface{}{}
-			r = append(r, this.TakeName, out)
-			ch <- r
-			return true
-		}
-	} else {
-		if this.TaskFunc == nil {
-			LogChan <- fmt.Sprintf("Error: %s no task", this.TakeName)
-			this.Status = NO_TASK
-			stat <- []string{this.TakeName, this.Status}
-			return false
-		} else {
-			result = this.funGenerator()
-			if this.Status == SERIOUS || this.Status == NO_TASK {
-				stat <- []string{this.TakeName, this.Status}
-				return false
-			}
-			if len(result) != 0 {
-				ch <- result
-			}
-			return true
-		}
+	result = gt.funGenerator()
+	if gt.Status == SERIOUS || gt.Status == FAIL {
+		return false
 	}
+	if len(result) != 0 {
+		ch <- result
+		gt.Result = result[1:]
+	}
+	return true
 }
 
-func (this *goTask) funGenerator() []interface{} {
+func (gt *goTask) funGenerator() []interface{} {
 	defer func(g *goTask) {
-		serious_err := recover()
-		if serious_err != nil {
-			LogChan <- fmt.Sprintf("Error: %s task fail: %v", g.TakeName, serious_err)
+		serious := recover()
+		if serious != nil {
+			LogChan <- fmt.Sprintf("panic: %s task fail: %v", g.TakeName, serious)
 			g.Status = SERIOUS
 			if g.Cyclic {
 				g.DownChan <- 1
 			}
 		}
-	}(this)
+	}(gt)
 	var (
 		rFun              reflect.Value
 		args, returnValue []reflect.Value
-		l                 []interface{}
 	)
-	rFun = reflect.ValueOf(this.TaskFunc)
+	rFun = reflect.ValueOf(gt.Operate)
 	if rFun.Kind() != reflect.Func {
-		LogChan <- fmt.Sprintf("Error: %s no task", this.TakeName)
-		this.Status = NO_TASK
-		return l
+		LogChan <- fmt.Sprintf("ERROR: %s no task", gt.TakeName)
+		gt.Status = FAIL
+		return nil
 	}
-	for _, a := range this.TaskArgs {
+	for _, a := range gt.Args {
 		args = append(args, reflect.ValueOf(a))
 	}
 	returnValue = rFun.Call(args)
-	l = append(l, this.TakeName)
-	for _, r := range returnValue {
-		l = append(l, r.Interface())
+	if len(returnValue) != 0 {
+		l := make([]interface{}, len(returnValue)+1)
+		l[0] = gt.TakeName
+		for i, r := range returnValue {
+			l[i+1] = r.Interface()
+		}
+		return l
 	}
-	return l
+	return nil
 }
