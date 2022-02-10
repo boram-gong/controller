@@ -8,6 +8,7 @@ import (
 var LogChan = make(chan string, 1000)
 
 // 协程池结构体
+
 type GoPool struct {
 	sync.RWMutex
 	Pool        map[string]*goTask
