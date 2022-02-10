@@ -1,74 +1,74 @@
 package controller
 
 import (
-	"fmt"
+	"context"
+	"log"
 	"reflect"
-	"sync"
 	"time"
 )
 
 const (
-	INIT    = "Init"
-	START   = "Start"
-	SUCCESS = "Successful"
-	FAIL    = "Fail"
-	SERIOUS = "SeriousErr"
-	STOP    = "Stop"
+	INIT     = "Init"
+	RUN      = "Running"
+	COMPLETE = "Complete"
+	FAIL     = "Fail"
+	PANIC    = "Panic"
+	STOP     = "Stop"
 )
 
 type goTask struct {
-	sync.RWMutex
-	TakeName string
-	Args     []interface{}
-	Operate  interface{}
-	Cyclic   bool
-	Step     int
-	Status   string
-	Note     interface{}
-	DownChan chan int
-	Result   []interface{}
+	ctx     context.Context
+	clear   context.CancelFunc
+	Operate interface{} `json:"-"`
+	TaskMsg
+}
+
+type TaskMsg struct {
+	Args     []interface{} `json:"args"`
+	Cyclic   bool          `json:"cyclic"`
+	Step     int           `json:"step"`
+	Status   string        `json:"status"`
+	LastTime time.Time     `json:"lastTime"`
+	Note     interface{}   `json:"note"`
+	Result   []interface{} `json:"result"`
 }
 
 func newGoTask(taskName string, fun interface{}, args []interface{}, cyclic bool, step int, note interface{}) (task *goTask) {
 	task = new(goTask)
-	task.TakeName = taskName
+	task.ctx, task.clear = context.WithCancel(context.WithValue(context.Background(), "name", taskName))
 	task.Operate = fun
 	task.Args = args
 	task.Cyclic = cyclic
 	task.Step = step
 	task.Status = INIT
-	task.DownChan = make(chan int, 1)
 	task.Note = note
 	return
 }
 
 func (gt *goTask) start(ch chan []interface{}) {
-	if gt.Status == START {
-		LogChan <- fmt.Sprintf("WARN: '%v' task is running, don't to need run again", gt.TakeName)
+	if gt.Status == RUN {
 		return
 	}
-	gt.Status = START
+	gt.Status = RUN
 	go gt.work(ch)
 }
 
 func (gt *goTask) work(ch chan []interface{}) {
 	if gt.run(ch) {
-		if gt.Status != SERIOUS && gt.Status != FAIL && !gt.Cyclic {
-			gt.Status = SUCCESS + "_" + time.Now().Format("2006/01/02/15:04")
+		if gt.Status != PANIC && gt.Status != FAIL && !gt.Cyclic {
+			gt.Status = COMPLETE
 		}
 	}
-	if !gt.Cyclic {
-		return
-	}
-	for {
-		select {
-		case <-time.Tick(time.Duration(gt.Step) * time.Second):
-			if !gt.run(ch) {
+	if gt.Cyclic {
+		for _ = range time.Tick(time.Duration(gt.Step) * time.Second) {
+			select {
+			case <-gt.ctx.Done():
 				return
+			default:
+				if !gt.run(ch) {
+					return
+				}
 			}
-		case <-gt.DownChan:
-			LogChan <- fmt.Sprintf("INFO: '%v' task manual stop", gt.TakeName)
-			return
 		}
 	}
 }
@@ -80,10 +80,8 @@ func (gt *goTask) stop() {
 	if gt.Status == STOP {
 		return
 	}
-	gt.DownChan <- 1
-	gt.Lock()
+	gt.clear()
 	gt.Status = STOP
-	gt.Unlock()
 }
 
 func (gt *goTask) run(ch chan []interface{}) bool {
@@ -91,7 +89,8 @@ func (gt *goTask) run(ch chan []interface{}) bool {
 		result []interface{}
 	)
 	result = gt.funGenerator()
-	if gt.Status == SERIOUS || gt.Status == FAIL {
+	gt.LastTime = time.Now()
+	if gt.Status == PANIC || gt.Status == FAIL {
 		return false
 	}
 	if len(result) != 0 {
@@ -105,10 +104,10 @@ func (gt *goTask) funGenerator() []interface{} {
 	defer func(g *goTask) {
 		serious := recover()
 		if serious != nil {
-			LogChan <- fmt.Sprintf("panic: %s task fail: %v", g.TakeName, serious)
-			g.Status = SERIOUS
+			log.Printf("panic: %s task fail: %v \n", gt.ctx.Value("name"), serious)
+			g.Status = PANIC
 			if g.Cyclic {
-				g.DownChan <- 1
+				g.clear()
 			}
 		}
 	}(gt)
@@ -118,7 +117,6 @@ func (gt *goTask) funGenerator() []interface{} {
 	)
 	rFun = reflect.ValueOf(gt.Operate)
 	if rFun.Kind() != reflect.Func {
-		LogChan <- fmt.Sprintf("ERROR: %s no task", gt.TakeName)
 		gt.Status = FAIL
 		return nil
 	}
@@ -128,7 +126,7 @@ func (gt *goTask) funGenerator() []interface{} {
 	returnValue = rFun.Call(args)
 	if len(returnValue) != 0 {
 		l := make([]interface{}, len(returnValue)+1)
-		l[0] = gt.TakeName
+		l[0] = gt.ctx.Value("name")
 		for i, r := range returnValue {
 			l[i+1] = r.Interface()
 		}
